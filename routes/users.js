@@ -36,7 +36,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const db = await connectDB();
-    const { username, email, password } = req.body;
+    const {name, username, email, password } = req.body;
 
     if (await db.collection('users').findOne({ username })) {
       return res.status(400).json({ error: 'Username already taken' });
@@ -49,6 +49,7 @@ router.post('/', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
     const newUser = {
+      name,
       username,
       email,
       password: hashedPassword,
