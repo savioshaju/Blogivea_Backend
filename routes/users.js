@@ -1,4 +1,3 @@
-
 const { ObjectId } = require('mongodb');
 const express = require('express');
 const router = express.Router();
@@ -9,20 +8,23 @@ const bcrypt = require('bcrypt');
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_here';
 const SALT_ROUNDS = 10;
 
-
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) return res.status(401).json({ error: 'No token provided' });
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, (err, payload) => {
     if (err) return res.status(403).json({ error: 'Invalid token' });
-    req.user = user;
+
+    req.user = {
+      ...payload,
+      userId: payload.userId || payload._id?.toString(), 
+    };
+
     next();
   });
 }
-
 
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -30,11 +32,12 @@ router.get('/', authenticateToken, async (req, res) => {
     const users = await db.collection('users').find({}, { projection: { password: 0 } }).toArray();
     res.json(users);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-
+//Register new user 
 router.post('/', async (req, res) => {
   try {
     const db = await connectDB();
@@ -61,7 +64,7 @@ router.post('/', async (req, res) => {
     const result = await db.collection('users').insertOne(newUser);
 
     const token = jwt.sign(
-      { userId: result.insertedId, username, userType: newUser.userType },
+      { userId: result.insertedId.toString(), username, userType: newUser.userType },
       JWT_SECRET,
       { expiresIn: '1h' }
     );
@@ -72,6 +75,8 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: 'Failed to insert user' });
   }
 });
+
+// current user profile 
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
     const db = await connectDB();
@@ -90,10 +95,18 @@ router.get('/profile', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
+
+// update current user's profile ---
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
     const db = await connectDB();
-    const userId = new ObjectId(req.user.userId);
+    const userIdStr = req.user?.userId;
+
+    if (!userIdStr || !ObjectId.isValid(userIdStr)) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+
+    const userId = new ObjectId(userIdStr);
 
     const updateFields = {
       name: req.body.name,
@@ -101,53 +114,58 @@ router.put('/profile', authenticateToken, async (req, res) => {
       email: req.body.email
     };
 
-   
-    Object.keys(updateFields).forEach(
-      key => updateFields[key] === undefined && delete updateFields[key]
-    );
+ 
+    Object.keys(updateFields).forEach(key => {
+      if (updateFields[key] === undefined) delete updateFields[key];
+    });
 
     if (req.body.password) {
       updateFields.password = await bcrypt.hash(req.body.password, SALT_ROUNDS);
     }
 
-  
     if (updateFields.username) {
       const existingUser = await db.collection('users').findOne({
         username: updateFields.username,
         _id: { $ne: userId }
       });
       if (existingUser) {
-        return res.status(400).json({ error: 'Username already taken' });
+        return res.status(400).json({ message: 'Username already taken' });
       }
     }
 
-    
     if (updateFields.email) {
       const existingUser = await db.collection('users').findOne({
         email: updateFields.email,
         _id: { $ne: userId }
       });
       if (existingUser) {
-        return res.status(400).json({ error: 'Email already taken' });
+        return res.status(400).json({ message: 'Email already taken' });
       }
     }
 
-    const result = await db.collection('users').findOneAndUpdate(
+    console.log('Updating user with:', updateFields);
+
+    const updateResult = await db.collection('users').updateOne(
       { _id: userId },
-      { $set: updateFields },
-      { returnDocument: 'after', projection: { password: 0 } }
+      { $set: updateFields }
     );
 
-    if (!result.value) {
-      return res.status(404).json({ error: 'User not found' });
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json(result.value);
+    const updatedUser = await db.collection('users').findOne(
+      { _id: userId },
+      { projection: { password: 0 } }
+    );
+
+    res.json(updatedUser);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error updating profile:', error.stack || error);
+    res.status(500).json({ message: error.message || 'Server error' });
   }
 });
+
 
 router.post('/login', async (req, res) => {
   try {
@@ -166,7 +184,7 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user._id, username: user.username, userType: user.userType },
+      { userId: user._id.toString(), username: user.username, userType: user.userType },
       JWT_SECRET,
       { expiresIn: '1h' }
     );
