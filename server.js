@@ -1,5 +1,5 @@
 const express = require('express');
-const cors = require('cors'); // 👈 ADD THIS LINE
+const cors = require('cors'); 
 const usersRouter = require('./routes/users');
 const postsRouter = require('./routes/posts');
 
