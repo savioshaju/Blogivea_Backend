@@ -1,3 +1,5 @@
+
+const { ObjectId } = require('mongodb');
 const express = require('express');
 const router = express.Router();
 const connectDB = require('../db');
@@ -10,7 +12,7 @@ const SALT_ROUNDS = 10;
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; 
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) return res.status(401).json({ error: 'No token provided' });
 
@@ -36,7 +38,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const db = await connectDB();
-    const {name, username, email, password } = req.body;
+    const { name, username, email, password } = req.body;
 
     if (await db.collection('users').findOne({ username })) {
       return res.status(400).json({ error: 'Username already taken' });
@@ -70,7 +72,82 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: 'Failed to insert user' });
   }
 });
+router.get('/profile', authenticateToken, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(req.user.userId) },
+      { projection: { password: 0 } }
+    );
 
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+router.put('/profile', authenticateToken, async (req, res) => {
+  try {
+    const db = await connectDB();
+    const userId = new ObjectId(req.user.userId);
+
+    const updateFields = {
+      name: req.body.name,
+      username: req.body.username,
+      email: req.body.email
+    };
+
+   
+    Object.keys(updateFields).forEach(
+      key => updateFields[key] === undefined && delete updateFields[key]
+    );
+
+    if (req.body.password) {
+      updateFields.password = await bcrypt.hash(req.body.password, SALT_ROUNDS);
+    }
+
+  
+    if (updateFields.username) {
+      const existingUser = await db.collection('users').findOne({
+        username: updateFields.username,
+        _id: { $ne: userId }
+      });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Username already taken' });
+      }
+    }
+
+    
+    if (updateFields.email) {
+      const existingUser = await db.collection('users').findOne({
+        email: updateFields.email,
+        _id: { $ne: userId }
+      });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already taken' });
+      }
+    }
+
+    const result = await db.collection('users').findOneAndUpdate(
+      { _id: userId },
+      { $set: updateFields },
+      { returnDocument: 'after', projection: { password: 0 } }
+    );
+
+    if (!result.value) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.value);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 router.post('/login', async (req, res) => {
   try {
