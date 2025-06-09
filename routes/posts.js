@@ -10,12 +10,13 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const db = await connectDB();
-  const { name, username, content,title, createdAt } = req.body;
+  const { name, username, content,title,description, createdAt } = req.body;
   const newPost = {
     name,
     username,
     content,
     title,
+    description,
     createdAt
   }
   const result = await db.collection('posts').insertOne(newPost);
