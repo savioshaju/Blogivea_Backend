@@ -44,7 +44,7 @@ router.get('/:id', async (req, res) => {
 router.get('/mypost/:username', async (req, res) => {
   try {
     const db = await connectDB();
-    const userName = req.params.username; 
+    const userName = req.params.username;
 
     const postsCursor = db.collection('posts').find({ username: userName });
     const posts = await postsCursor.toArray();
@@ -53,13 +53,29 @@ router.get('/mypost/:username', async (req, res) => {
       return res.status(404).json({ message: 'No posts found for this user' });
     }
 
-    res.json(posts); 
+    res.json(posts);
   } catch (error) {
     console.error('Error fetching posts:', error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
 
+router.delete('/:id', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const postId = req.params.id;
 
+    const result = await db.collection('posts').deleteOne({ _id: new ObjectId(postId) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    res.json({ message: 'Post deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
 
 module.exports = router;
