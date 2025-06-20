@@ -77,5 +77,37 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+router.put('/update', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const { id, name, username, content, title, description, updatedAt } = req.body;
+
+    if (!id) return res.status(400).json({ error: 'Post ID is required' });
+
+    const { ObjectId } = require('mongodb');
+    const result = await db.collection('posts').updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          name,
+          username,
+          content,
+          title,
+          description,
+          updatedAt
+        }
+      }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: 'Post not found or data unchanged' });
+    }
+
+    res.status(200).json({ message: 'Post updated successfully' });
+  } catch (error) {
+    console.error('Error updating post:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 module.exports = router;
