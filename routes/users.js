@@ -196,4 +196,22 @@ router.post('/login', async (req, res) => {
   }
 });
 
+router.delete('/delete/:username', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const userName = req.params.username;
+
+    const result = await db.collection('users').deleteOne({ username: userName });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'Account not found' });
+    }
+
+    res.json({ message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
 module.exports = router;

@@ -77,6 +77,22 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
+router.delete('/delete/:username', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const userName = req.params.username;
+
+    const result = await db.collection('posts').deleteMany({ username: userName });
+
+    res.json({ message: 'Posts deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting posts:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
 router.put('/update', async (req, res) => {
   try {
     const db = await connectDB();
